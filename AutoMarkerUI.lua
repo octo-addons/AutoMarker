@@ -554,33 +554,51 @@ end
 -- Page: help
 -- ---------------------------------------------------------------------------
 
+-- "||" renders as a single "|"; a bare "|" starts an escape code.
 local helpLines = {
   "|cffffff00Marking|r",
-  "Shift+Ctrl (or Alt) + mouseover a mob: mark its pack, or auto-mark around it.",
-  "/am mark - same as above for your target or mouseover.",
+  "Shift+Ctrl (or Alt) + mouseover: mark the mob's pack, or auto-mark around it.",
+  "/am mark - same for your target or mouseover.",
   "/am next - mark the next pack in this zone's default order.",
   "/am clearmarks - remove all marks.",
   "/am markname <name> - mark every nearby mob with that name.",
+  " ",
   "|cffffff00Auto mode|r",
-  "/am auto [on|off|status], /am autoscan, /am radius <yd>, /am pullradius <yd>",
-  "/am prio add|remove|top|reset <pattern>, /am ignore add|remove|reset <pattern>",
-  "/am autosort health|class, /am autocombat, /am autolos, /am autotapped, /am autoinstance",
+  "/am auto [on||off||status]  -  /am autoscan",
+  "/am radius <yd>  -  /am pullradius <yd>  -  /am autosort health||class",
+  "/am prio add||remove||top||reset <pattern>",
+  "/am ignore add||remove||reset <pattern>",
+  "/am autocombat, /am autolos, /am autotapped, /am autoinstance",
+  " ",
   "|cffffff00Learning from your own marks|r",
-  "Marks you set by hand are learned by name (/am learn) and, inside instances,",
-  "recorded into packs for that zone (/am record). See the Learned tab.",
-  "|cffffff00Own packs (any server)|r",
-  "Or record by hand: /am set <pack>, target a mob and /am add, or /am sweep",
-  "and mouse over mobs to record them. /am get shows the pack of your target.",
+  "Marks you set by hand are learned by name (/am learn) and, inside",
+  "instances, recorded into packs for that zone (/am record).",
+  "See the Learned tab.",
+  " ",
+  "|cffffff00Own packs, by hand|r",
+  "/am set <pack>, then target a mob and /am add, or /am sweep and",
+  "mouse over mobs. /am get shows the pack of your target.",
+  " ",
   "|cffffff00Notes|r",
-  "Only a leader or assistant places marks others can see. Solo, marks are local.",
-  "The shipped packs were recorded on another server and do nothing on OctoWoW.",
+  "Only a leader or assistant places marks others can see.",
+  "Solo, marks are local. The shipped packs come from another",
+  "server and do nothing on OctoWoW.",
 }
 
 local function BuildHelpPage(page)
-  local y = -4
+  -- Chain each line under the previous one so wrapped lines never overlap.
+  local previous = nil
   for _, line in ipairs(helpLines) do
-    MakeLabel(page, line, 8, y, "GameFontHighlightSmall", 330)
-    y = y - 14
+    local fs = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    fs:SetJustifyH("LEFT")
+    fs:SetWidth(330)
+    fs:SetText(line)
+    if previous then
+      fs:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
+    else
+      fs:SetPoint("TOPLEFT", page, "TOPLEFT", 8, -4)
+    end
+    previous = fs
   end
 end
 

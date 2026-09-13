@@ -2104,13 +2104,13 @@ local function handleCommands(msg, editbox)
       else
         for i, v in ipairs(list) do auto_print("  " .. i .. ". " .. v) end
       end
-      auto_print("Use /am " .. which .. " add|remove|top <pattern>, /am " .. which .. " reset")
+      auto_print("Use /am " .. which .. " add||remove||top <pattern>, /am " .. which .. " reset")
     end
     if not ok then auto_print("AutoMarker: " .. tostring(err) .. ".") end
   elseif command == "autosort" then
     local sub = packName and string.lower(packName)
     if sub ~= "health" and sub ~= "class" then
-      auto_print("Current sort: " .. AutoMarkerDB.settings.autoSort .. ". Use /am autosort health|class.")
+      auto_print("Current sort: " .. AutoMarkerDB.settings.autoSort .. ". Use /am autosort health||class.")
       return
     end
     AutoMarker_SetSetting("autoSort", sub)
@@ -2149,12 +2149,12 @@ local function handleCommands(msg, editbox)
           auto_print("  " .. entry.name .. " -> " .. raidMarks[entry.mark + 1])
         end
       end
-      auto_print("Use /am learned remove <name>, /am learned reset, /am learn on|off")
+      auto_print("Use /am learned remove <name>, /am learned reset, /am learn on||off")
     end
   elseif command == "record" then
     local sub = packName and string.lower(packName)
     if sub ~= "off" and sub ~= "instance" and sub ~= "always" then
-      auto_print("Auto-record is '" .. AutoMarkerDB.settings.autoRecord .. "'. Use /am record off|instance|always.")
+      auto_print("Auto-record is '" .. AutoMarkerDB.settings.autoRecord .. "'. Use /am record off||instance||always.")
       return
     end
     AutoMarker_SetSetting("autoRecord", sub)
@@ -2193,16 +2193,16 @@ local function handleCommands(msg, editbox)
       auto_print(L["/am mark - Mark pack of current target or mouseover."])
       auto_print(L["/am markname - Mark all units of a given name."])
       auto_print(c("Auto mode (name-based, works on any server):", color.yellow))
-      auto_print("/am " .. c("auto", color.green) .. " [on|off|status] - Toggle automatic name-based marking.")
+      auto_print("/am " .. c("auto", color.green) .. " [on||off||status] - Toggle automatic name-based marking.")
       auto_print("/am " .. c("autoscan", color.green) .. " - Mark nearby hostiles now, even out of combat.")
       auto_print("/am " .. c("radius", color.green) .. " <yd> / " .. c("pullradius", color.green) .. " <yd> - Scan ranges (default 40 / 30).")
-      auto_print("/am " .. c("prio", color.green) .. " [add|remove|top|reset] <pattern> - Name priority list (first = Skull).")
-      auto_print("/am " .. c("ignore", color.green) .. " [add|remove|reset] <pattern> - Names never marked.")
-      auto_print("/am " .. c("autosort", color.green) .. " health|class, " .. c("autocombat", color.green) .. ", " .. c("autolos", color.green) .. ", " .. c("autotapped", color.green) .. ", " .. c("autoinstance", color.green))
+      auto_print("/am " .. c("prio", color.green) .. " [add||remove||top||reset] <pattern> - Name priority list (first = Skull).")
+      auto_print("/am " .. c("ignore", color.green) .. " [add||remove||reset] <pattern> - Names never marked.")
+      auto_print("/am " .. c("autosort", color.green) .. " health||class, " .. c("autocombat", color.green) .. ", " .. c("autolos", color.green) .. ", " .. c("autotapped", color.green) .. ", " .. c("autoinstance", color.green))
       auto_print(c("Learning from marks you set by hand:", color.yellow))
-      auto_print("/am " .. c("learn", color.green) .. " [on|off] - Remember which mark each mob name gets.")
-      auto_print("/am " .. c("learned", color.green) .. " [remove <name>|reset] - Show or edit learned names.")
-      auto_print("/am " .. c("record", color.green) .. " off|instance|always - Save marks you set into packs for this zone.")
+      auto_print("/am " .. c("learn", color.green) .. " [on||off] - Remember which mark each mob name gets.")
+      auto_print("/am " .. c("learned", color.green) .. " [remove <name>||reset] - Show or edit learned names.")
+      auto_print("/am " .. c("record", color.green) .. " off||instance||always - Save marks you set into packs for this zone.")
       auto_print("/am " .. c("packs", color.green) .. " [delete <name>] - Recorded packs in this zone.")
       auto_print("/am " .. c("ui", color.green) .. " - Open the info panel (also on the minimap button).")
 
