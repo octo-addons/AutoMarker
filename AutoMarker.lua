@@ -201,9 +201,21 @@ local function PlayerCanMark()
   return PlayerCanRaidMark() or not InGroup()
 end
 
+-- Marks placed by this addon, keyed by guid. RAID_TARGET_UPDATE compares the
+-- live marks against this table to tell marks set by people from our own.
+local addonPlaced = {}
+
 -- returns false if the mark was solo
 local warned_lead = false
 local function MarkUnit(unit,mark)
+  local _, placedGuid = UnitExists(unit)
+  if placedGuid then
+    if mark and mark > 0 then
+      addonPlaced[placedGuid] = mark
+    else
+      addonPlaced[placedGuid] = nil
+    end
+  end
   if PlayerCanRaidMark() then
     SetRaidTarget(unit,mark)
     return true
@@ -360,6 +372,9 @@ local function AM_UnitPopup_OnClick()
       raidTargetIndex = 0;
     end
     MarkUnit(unit, tonumber(raidTargetIndex))
+    -- chosen by a person through the menu: let the learner see it as manual
+    local _, menuGuid = UnitExists(unit)
+    if menuGuid then addonPlaced[menuGuid] = nil end
   end
   PlaySound("UChatScrollButton");
 end
@@ -382,6 +397,9 @@ local defaultSettings = {
   autoLos = false,
   autoSkipTapped = true,
   autoInstanceOnly = false,
+  -- learning from marks set by people
+  autoLearn = true,          -- remember name -> mark
+  autoRecord = "instance",   -- record spawn -> mark into packs: "off", "instance", "always"
 }
 
 local sweep_on = false
@@ -794,6 +812,7 @@ function AutoMarker_InitAutoLists()
   end
   for i, v in ipairs(AutoMarkerDB.autoPrio) do AutoMarkerDB.autoPrio[i] = string.lower(v) end
   for i, v in ipairs(AutoMarkerDB.autoIgnore) do AutoMarkerDB.autoIgnore[i] = string.lower(v) end
+  if type(AutoMarkerDB.learned) ~= "table" then AutoMarkerDB.learned = {} end
 end
 
 local function IsMobGuid(guid)
@@ -1039,6 +1058,26 @@ local function AutoAssign(anchor, radius, requireCombat)
       end
     end
   end
+  -- pass 1b: names learned from marks people set get their usual mark
+  if AutoMarkerDB.settings.autoLearn then
+    for k = 1, n do
+      local r = cands[k]
+      if not r.done then
+        local lm = AutoMarkerDB.learned[r.name]
+        if lm and lm > 0 then
+          for f = 1, table.getn(free) do
+            if free[f] == lm then
+              AssignMark(r.guid, lm)
+              tremove(free, f)
+              r.done = true
+              placed = placed + 1
+              break
+            end
+          end
+        end
+      end
+    end
+  end
   -- pass 2: everyone else by priority, Skull downward
   tsort(cands, CandidateLess)
   local f = 1
@@ -1107,6 +1146,138 @@ function AutoMarker_ResetAutoState()
   auto.owner_guid = {}
   auto.seen = {}
   auto.pack_index_dirty = true
+  for guid in pairs(addonPlaced) do addonPlaced[guid] = nil end
+end
+
+-- /// Learning from marks set by people /// --
+
+local recordGroup = { name = nil, zone = nil, time = 0, anchor = nil }
+
+local function SanitizePackName(name)
+  local n = string.lower(name or "")
+  n = string.gsub(n, "[^%w]+", "_")
+  n = string.gsub(n, "^_+", "")
+  n = string.gsub(n, "_+$", "")
+  if n == "" then n = "pack" end
+  return n
+end
+
+-- Records guid with its current mark into a custom pack for this zone. Marks
+-- set within 30 s and pullRadius of each other land in the same pack.
+local function RecordIntoPack(guid, name)
+  local zone = GetRealZoneText()
+  local now = GetTime()
+  local packName = recordGroup.name
+  local reuse = packName and recordGroup.zone == zone and (now - recordGroup.time) < 30
+  if reuse and recordGroup.anchor and recordGroup.anchor ~= guid then
+    local d = DistanceBetween(recordGroup.anchor, guid)
+    if d and d > AutoMarkerDB.settings.pullRadius then reuse = false end
+  end
+  local existing = guidToPack(guid, zone)
+  if existing then
+    packName = existing
+    reuse = true
+  end
+  if not reuse then
+    local base = SanitizePackName(name)
+    local custom = AutoMarkerDB.customNpcsToMark[zone] or {}
+    local defaults = currentNpcsToMark[zone] or {}
+    packName = base
+    local n = 1
+    while custom[packName] or defaults[packName] do
+      n = n + 1
+      packName = base .. "_" .. n
+    end
+    recordGroup.anchor = guid
+  end
+  recordGroup.name = packName
+  recordGroup.zone = zone
+  recordGroup.time = now
+  AddToPack(guid, true, packName)
+end
+
+local function NoteManualMark(guid, mark)
+  local s = AutoMarkerDB.settings
+  local name = UnitName(guid)
+  if not name or mark <= 0 then return end
+  if s.autoLearn then
+    local lname = string.lower(name)
+    if AutoMarkerDB.learned[lname] ~= mark then
+      AutoMarkerDB.learned[lname] = mark
+      if s.debug then auto_print("learned: " .. name .. " -> " .. raidMarks[mark + 1]) end
+    end
+  end
+  local rec = s.autoRecord
+  local inInstance = type(IsInInstance) == "function" and IsInInstance()
+  if rec == "always" or (rec == "instance" and inInstance) then
+    RecordIntoPack(guid, name)
+  end
+end
+
+-- Fired by the client whenever any raid target changes. Marks that differ
+-- from what this addon placed were set by a person.
+function AutoMarker_OnRaidTargetUpdate()
+  if not has_superwow or not AutoMarkerDB or not AutoMarkerDB.settings then return end
+  local s = AutoMarkerDB.settings
+  if not s.autoLearn and s.autoRecord == "off" then return end
+  for i = 1, 8 do
+    local _, guid = UnitExists("mark" .. i)
+    if guid and IsMobGuid(guid) and addonPlaced[guid] ~= i then
+      addonPlaced[guid] = i
+      NoteManualMark(guid, i)
+    end
+  end
+end
+
+-- Sorted array of { name = , mark = } for the panel and /am learned.
+function AutoMarker_LearnedList()
+  local list = {}
+  for name, mark in pairs(AutoMarkerDB.learned or {}) do
+    tinsert(list, { name = name, mark = mark })
+  end
+  tsort(list, function(a, b)
+    if a.mark ~= b.mark then return a.mark > b.mark end
+    return a.name < b.name
+  end)
+  return list
+end
+
+function AutoMarker_LearnedRemove(name)
+  name = string.lower(name or "")
+  if AutoMarkerDB.learned[name] == nil then return false, "not learned" end
+  AutoMarkerDB.learned[name] = nil
+  return true
+end
+
+function AutoMarker_LearnedReset()
+  AutoMarkerDB.learned = {}
+  return true
+end
+
+-- Custom (recorded) packs in the current zone: array of { name = , count = }.
+function AutoMarker_ZonePacks()
+  local zone = GetRealZoneText()
+  local list = {}
+  for packName, pack in pairs((AutoMarkerDB.customNpcsToMark or {})[zone] or {}) do
+    local count = 0
+    for _ in pairs(pack) do count = count + 1 end
+    tinsert(list, { name = packName, count = count })
+  end
+  tsort(list, function(a, b) return a.name < b.name end)
+  return list
+end
+
+function AutoMarker_DeletePack(packName)
+  local zone = GetRealZoneText()
+  local custom = (AutoMarkerDB.customNpcsToMark or {})[zone]
+  if not custom or not custom[packName] then return false, "no such pack" end
+  custom[packName] = nil
+  if currentNpcsToMark[zone] then
+    currentNpcsToMark[zone][packName] = defaultNpcsToMark[zone] and defaultNpcsToMark[zone][packName] or nil
+  end
+  if recordGroup.name == packName then recordGroup.name = nil end
+  AutoMarker_InvalidatePackIndex()
+  return true
 end
 
 -- /// Public API used by the info panel and slash commands /// --
@@ -1160,6 +1331,7 @@ function AutoMarker_SetSetting(key, value)
     AutoMarkerDB.settings[key] = value
   else
     if key == "autoSort" and value ~= "health" and value ~= "class" then return false end
+    if key == "autoRecord" and value ~= "off" and value ~= "instance" and value ~= "always" then return false end
     AutoMarkerDB.settings[key] = value
   end
   if key == "auto" then auto.idle_warned = false end
@@ -1276,6 +1448,7 @@ autoMarker:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 autoMarker:RegisterEvent("CHAT_MSG_ADDON") -- slow corehound mark swap
 autoMarker:RegisterEvent(use_nampower and "UNIT_MODEL_CHANGED_GUID" or "UNIT_MODEL_CHANGED")
 autoMarker:RegisterEvent("UNIT_DIED") -- nampower; inert on clients without it
+autoMarker:RegisterEvent("RAID_TARGET_UPDATE")
 
 autoMarker.TriggerEvent = function (self,event,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10)
   if autoMarker[event] then
@@ -1714,6 +1887,10 @@ function autoMarker:UNIT_DIED(guid)
   AutoMarker_OnUnitDied(guid)
 end
 
+function autoMarker:RAID_TARGET_UPDATE()
+  AutoMarker_OnRaidTargetUpdate()
+end
+
 function autoMarker:ZONE_CHANGED_NEW_AREA()
   local zone = GetRealZoneText()
   AutoMarkerDB.zone = zone
@@ -1947,6 +2124,59 @@ local function handleCommands(msg, editbox)
     if sub == "on" then value = true elseif sub == "off" then value = false else value = not AutoMarkerDB.settings[key] end
     AutoMarker_SetSetting(key, value)
     auto_print(command .. " [ " .. (AutoMarkerDB.settings[key] and c("on", color.green) or c("off", color.red)) .. " ]")
+  elseif command == "learn" then
+    local sub = packName and string.lower(packName)
+    local value
+    if sub == "on" then value = true elseif sub == "off" then value = false else value = not AutoMarkerDB.settings.autoLearn end
+    AutoMarker_SetSetting("autoLearn", value)
+    auto_print("Learning names from marks you set [ " .. (AutoMarkerDB.settings.autoLearn and c("on", color.green) or c("off", color.red)) .. " ]")
+  elseif command == "learned" then
+    local sub = packName and string.lower(packName)
+    if sub == "remove" then
+      local name = table.concat(args, " ", 3)
+      local ok, err = AutoMarker_LearnedRemove(name)
+      auto_print(ok and ("Forgot '" .. string.lower(name) .. "'.") or ("AutoMarker: " .. tostring(err) .. "."))
+    elseif sub == "reset" then
+      AutoMarker_LearnedReset()
+      auto_print("All learned names were forgotten.")
+    else
+      local list = AutoMarker_LearnedList()
+      auto_print(c("Learned names (from marks people set):", color.yellow))
+      if table.getn(list) == 0 then
+        auto_print("  (none yet)")
+      else
+        for _, entry in ipairs(list) do
+          auto_print("  " .. entry.name .. " -> " .. raidMarks[entry.mark + 1])
+        end
+      end
+      auto_print("Use /am learned remove <name>, /am learned reset, /am learn on|off")
+    end
+  elseif command == "record" then
+    local sub = packName and string.lower(packName)
+    if sub ~= "off" and sub ~= "instance" and sub ~= "always" then
+      auto_print("Auto-record is '" .. AutoMarkerDB.settings.autoRecord .. "'. Use /am record off|instance|always.")
+      return
+    end
+    AutoMarker_SetSetting("autoRecord", sub)
+    auto_print("Auto-record of marks you set into packs: " .. c(sub, color.green))
+  elseif command == "packs" then
+    local sub = packName and string.lower(packName)
+    if sub == "delete" then
+      local name = table.concat(args, " ", 3)
+      local ok, err = AutoMarker_DeletePack(name)
+      auto_print(ok and ("Deleted pack '" .. name .. "'.") or ("AutoMarker: " .. tostring(err) .. "."))
+    else
+      local list = AutoMarker_ZonePacks()
+      auto_print(c("Recorded packs in " .. GetRealZoneText() .. ":", color.yellow))
+      if table.getn(list) == 0 then
+        auto_print("  (none)")
+      else
+        for _, entry in ipairs(list) do
+          auto_print("  " .. entry.name .. " (" .. entry.count .. " mobs)")
+        end
+      end
+      auto_print("Use /am packs delete <name>")
+    end
   elseif command == "ui" or command == "options" or command == "config" then
     if AutoMarker_ToggleUI then AutoMarker_ToggleUI() end
   else
@@ -1969,6 +2199,11 @@ local function handleCommands(msg, editbox)
       auto_print("/am " .. c("prio", color.green) .. " [add|remove|top|reset] <pattern> - Name priority list (first = Skull).")
       auto_print("/am " .. c("ignore", color.green) .. " [add|remove|reset] <pattern> - Names never marked.")
       auto_print("/am " .. c("autosort", color.green) .. " health|class, " .. c("autocombat", color.green) .. ", " .. c("autolos", color.green) .. ", " .. c("autotapped", color.green) .. ", " .. c("autoinstance", color.green))
+      auto_print(c("Learning from marks you set by hand:", color.yellow))
+      auto_print("/am " .. c("learn", color.green) .. " [on|off] - Remember which mark each mob name gets.")
+      auto_print("/am " .. c("learned", color.green) .. " [remove <name>|reset] - Show or edit learned names.")
+      auto_print("/am " .. c("record", color.green) .. " off|instance|always - Save marks you set into packs for this zone.")
+      auto_print("/am " .. c("packs", color.green) .. " [delete <name>] - Recorded packs in this zone.")
       auto_print("/am " .. c("ui", color.green) .. " - Open the info panel (also on the minimap button).")
 
       auto_print(L["/am debug - Toggle debug mode."])

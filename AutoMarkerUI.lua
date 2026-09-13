@@ -318,6 +318,135 @@ local function RefreshListPage(page)
 end
 
 -- ---------------------------------------------------------------------------
+-- Page: learned names and recorded packs
+-- ---------------------------------------------------------------------------
+
+local LEARNED_ROWS = 8
+local PACK_ROWS = 5
+local markNames = { "Unmarked", "Star", "Circle", "Diamond", "Triangle", "Moon", "Square", "Cross", "Skull" }
+local recordLabels = { off = "Off", instance = "In instances", always = "Everywhere" }
+local recordOrder = { off = "instance", instance = "always", always = "off" }
+
+local function BuildLearnedPage(page)
+  page.learnedOffset = 0
+
+  MakeLabel(page, "Marks you set by hand are remembered two ways:", 8, -4, "GameFontHighlightSmall", 330)
+
+  page.learnCheck = MakeCheck(page, "Learn name -> mark (used by auto mode everywhere)", 8, -18,
+    "When you put a mark on a mob by hand, auto mode gives that mark to mobs with the same name from then on.",
+    function()
+      AutoMarker_SetSetting("autoLearn", this:GetChecked() and true or false)
+      RefreshAll()
+    end)
+
+  MakeLabel(page, "Record marks into packs for this zone:", 12, -46, "GameFontHighlightSmall")
+  page.recordButton = MakeButton(page, "In instances", 100, 20, function()
+    local current = AutoMarkerDB.settings.autoRecord or "instance"
+    AutoMarker_SetSetting("autoRecord", recordOrder[current] or "instance")
+    RefreshAll()
+  end)
+  page.recordButton:SetPoint("TOPLEFT", page, "TOPLEFT", 220, -42)
+
+  MakeLabel(page, "Learned names", 8, -70, "GameFontNormal")
+  page.learnedRows = {}
+  local y = -86
+  for i = 1, LEARNED_ROWS do
+    local row = {}
+    row.text = MakeLabel(page, "", 12, y - 3, "GameFontHighlightSmall", 250)
+    row.remove = MakeButton(page, "x", 22, 18, function()
+      if this.name then
+        AutoMarker_LearnedRemove(this.name)
+        RefreshAll()
+      end
+    end)
+    row.remove:SetPoint("TOPLEFT", page, "TOPLEFT", 296, y)
+    page.learnedRows[i] = row
+    y = y - 18
+  end
+  page.learnedUp = MakeButton(page, "Up", 40, 18, function()
+    page.learnedOffset = math.max(0, page.learnedOffset - LEARNED_ROWS)
+    RefreshAll()
+  end)
+  page.learnedUp:SetPoint("TOPLEFT", page, "TOPLEFT", 200, y - 2)
+  page.learnedDown = MakeButton(page, "Down", 46, 18, function()
+    page.learnedOffset = page.learnedOffset + LEARNED_ROWS
+    RefreshAll()
+  end)
+  page.learnedDown:SetPoint("LEFT", page.learnedUp, "RIGHT", 4, 0)
+  page.learnedReset = MakeButton(page, "Forget all", 70, 18, function()
+    AutoMarker_LearnedReset()
+    RefreshAll()
+  end)
+  page.learnedReset:SetPoint("TOPLEFT", page, "TOPLEFT", 12, y - 2)
+  page.learnedCount = MakeLabel(page, "", 90, y - 6, "GameFontHighlightSmall", 100)
+  y = y - 26
+
+  page.packTitle = MakeLabel(page, "Recorded packs in this zone", 8, y, "GameFontNormal", 330)
+  y = y - 16
+  page.packRows = {}
+  for i = 1, PACK_ROWS do
+    local row = {}
+    row.text = MakeLabel(page, "", 12, y - 3, "GameFontHighlightSmall", 230)
+    row.delete = MakeButton(page, "Delete", 56, 18, function()
+      if this.name then
+        AutoMarker_DeletePack(this.name)
+        RefreshAll()
+      end
+    end)
+    row.delete:SetPoint("TOPLEFT", page, "TOPLEFT", 262, y)
+    page.packRows[i] = row
+    y = y - 18
+  end
+  page.packHint = MakeLabel(page, "Shift+Ctrl mouseover any mob of a recorded pack to mark the whole pack again.",
+    12, y - 2, "GameFontHighlightSmall", 320)
+end
+
+local function RefreshLearnedPage(page)
+  local s = AutoMarkerDB.settings
+  page.learnCheck:SetChecked(s.autoLearn and 1 or nil)
+  page.recordButton:SetText(recordLabels[s.autoRecord or "instance"] or "In instances")
+
+  local list = AutoMarker_LearnedList()
+  local count = table.getn(list)
+  if page.learnedOffset >= count then page.learnedOffset = math.max(0, count - LEARNED_ROWS) end
+  for i = 1, LEARNED_ROWS do
+    local row = page.learnedRows[i]
+    local entry = list[page.learnedOffset + i]
+    row.remove.name = entry and entry.name or nil
+    if entry then
+      row.text:SetText(entry.name .. "  |cffaaaaaa->|r  " .. (markNames[entry.mark + 1] or entry.mark))
+      row.remove:Show()
+    else
+      row.text:SetText(i == 1 and "|cffaaaaaa(nothing learned yet)|r" or "")
+      row.remove:Hide()
+    end
+  end
+  page.learnedCount:SetText(count .. " learned")
+  if page.learnedOffset > 0 then page.learnedUp:Show() else page.learnedUp:Hide() end
+  if page.learnedOffset + LEARNED_ROWS < count then page.learnedDown:Show() else page.learnedDown:Hide() end
+
+  local packs = AutoMarker_ZonePacks()
+  page.packTitle:SetText("Recorded packs in " .. tostring(GetRealZoneText()))
+  for i = 1, PACK_ROWS do
+    local row = page.packRows[i]
+    local entry = packs[i]
+    row.delete.name = entry and entry.name or nil
+    if entry then
+      row.text:SetText(entry.name .. "  |cffaaaaaa(" .. entry.count .. " mobs)|r")
+      row.delete:Show()
+    else
+      row.text:SetText(i == 1 and "|cffaaaaaa(none recorded here)|r" or "")
+      row.delete:Hide()
+    end
+  end
+  if table.getn(packs) > PACK_ROWS then
+    page.packHint:SetText("Showing " .. PACK_ROWS .. " of " .. table.getn(packs) .. " packs. Use /am packs for the full list.")
+  else
+    page.packHint:SetText("Shift+Ctrl mouseover any mob of a recorded pack to mark the whole pack again.")
+  end
+end
+
+-- ---------------------------------------------------------------------------
 -- Page: macros and keys
 -- ---------------------------------------------------------------------------
 
@@ -436,8 +565,11 @@ local helpLines = {
   "/am auto [on|off|status], /am autoscan, /am radius <yd>, /am pullradius <yd>",
   "/am prio add|remove|top|reset <pattern>, /am ignore add|remove|reset <pattern>",
   "/am autosort health|class, /am autocombat, /am autolos, /am autotapped, /am autoinstance",
+  "|cffffff00Learning from your own marks|r",
+  "Marks you set by hand are learned by name (/am learn) and, inside instances,",
+  "recorded into packs for that zone (/am record). See the Learned tab.",
   "|cffffff00Own packs (any server)|r",
-  "Set marks by hand, then /am set <pack>, target a mob and /am add, or /am sweep",
+  "Or record by hand: /am set <pack>, target a mob and /am add, or /am sweep",
   "and mouse over mobs to record them. /am get shows the pack of your target.",
   "|cffffff00Notes|r",
   "Only a leader or assistant places marks others can see. Solo, marks are local.",
@@ -471,7 +603,7 @@ local function CreatePanel()
   if panel then return end
   panel = CreateFrame("Frame", "AutoMarkerPanel", UIParent)
   panel:SetWidth(360)
-  panel:SetHeight(440)
+  panel:SetHeight(480)
   panel:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
   panel:SetFrameStrata("DIALOG")
   panel:SetMovable(true)
@@ -496,14 +628,15 @@ local function CreatePanel()
   close:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -6, -6)
 
   local tabDefs = {
-    { key = "status", label = "Status" },
-    { key = "lists", label = "Priority" },
-    { key = "macros", label = "Macros & Keys" },
-    { key = "help", label = "Help" },
+    { key = "status", label = "Status", width = 62 },
+    { key = "lists", label = "Priority", width = 62 },
+    { key = "learned", label = "Learned", width = 66 },
+    { key = "macros", label = "Macros", width = 62 },
+    { key = "help", label = "Help", width = 52 },
   }
   local x = 14
   for _, def in ipairs(tabDefs) do
-    local tab = MakeButton(panel, def.label, def.key == "macros" and 96 or 70, 20, function()
+    local tab = MakeButton(panel, def.label, def.width, 20, function()
       ShowPage(this.key)
     end)
     tab.key = def.key
@@ -522,6 +655,7 @@ local function CreatePanel()
 
   BuildStatusPage(pages.status)
   BuildListPage(pages.lists)
+  BuildLearnedPage(pages.learned)
   BuildMacroPage(pages.macros)
   BuildHelpPage(pages.help)
 
@@ -538,6 +672,7 @@ RefreshAll = function()
   if not panel or not panel:IsVisible() or not Ready() then return end
   RefreshStatusPage(pages.status)
   RefreshListPage(pages.lists)
+  RefreshLearnedPage(pages.learned)
   RefreshMacroPage(pages.macros)
   if AutoMarker_UpdateMinimapIcon then AutoMarker_UpdateMinimapIcon() end
 end

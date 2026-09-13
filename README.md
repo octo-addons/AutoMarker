@@ -52,6 +52,30 @@ nothing unless they are promoted to assistant. If two assistants both run auto
 mode they usually agree, since the ordering is deterministic, but turning it
 off on one of them with `/am auto off` avoids any flicker.
 
+## Learning from marks you set by hand
+
+Auto mode is a fallback. Whenever you place a mark yourself, the addon
+remembers it in two ways, so next time it can do it for you:
+
+- **Name learning** (on by default): the mob's name is tied to the mark you
+  gave it. From then on, auto mode gives that mark to any mob with that name
+  when the mark is free, ahead of the priority list. Works everywhere.
+- **Auto-record** (on inside instances by default): the exact spawn is saved
+  into a pack for that zone, together with its mark. Marks set within 30
+  seconds and 30 yards of each other land in the same pack, named after the
+  first mob. Next visit, Shift+Ctrl mouseover on any mob of the pack marks the
+  whole pack exactly as you did before. Spawn IDs are stable on the same
+  server, so this is precise but only valid on OctoWoW.
+
+Marks set by other people in your raid are learned too; marks placed by the
+addon itself are not. The **Learned** tab in the panel shows both lists with
+remove buttons.
+
+- `/am learn [on|off]` - toggle name learning
+- `/am learned [remove <name>|reset]` - show or edit learned names
+- `/am record off|instance|always` - where auto-record is active
+- `/am packs [delete <name>]` - recorded packs in this zone
+
 ## Info panel and minimap button
 
 A skull icon on the minimap ring:
@@ -59,14 +83,17 @@ A skull icon on the minimap ring:
 - Left-click opens the panel, right-click toggles auto mode (the icon dims when
   off), drag moves it.
 
-The panel has four tabs:
+The panel has five tabs:
 
 - **Status**: what is on, whether this character can mark and why, the zone
   and whether it has pack data, free marks, cached mobs, detected client mods,
   plus all auto mode settings as checkboxes and sliders.
 - **Priority**: edit the priority list and the never-mark list. Add a pattern,
   remove one, or move one to the top.
-- **Macros & Keys**: ready-made macro text for every action. Click a box and
+- **Learned**: toggles for name learning and auto-record, the learned names
+  with their marks, and the packs recorded in the current zone, each with a
+  remove button.
+- **Macros**: ready-made macro text for every action. Click a box and
   press Ctrl+C to copy, or press **Create** to add the macro to this
   character's macro book (18 per character in 1.12). Shows the current
   keybindings and opens the key binding window.
