@@ -3,4 +3,5 @@
 	<Binding name="RUNKEY" header="AUTOMARK">AutoMarker_MarkGroup();</Binding>
   <Binding name="NEXTKEY" header="AUTOMARK">AutoMarker_MarkNextGroup();</Binding>
   <Binding name="CLEARKEY" header="AUTOMARK">AutoMarker_ClearMarks();</Binding>
+  <Binding name="AUTOSCANKEY" header="AUTOMARK">AutoMarker_AutoScan(true);</Binding>
 </Bindings>
