@@ -12,8 +12,8 @@ Requires [SuperWoW](https://github.com/balakethelock/SuperWoW/) or
 
 The original addon marks predefined "packs". Every pack entry is a **spawn
 GUID** such as `0xF13000C55326FDD0`, which identifies one creature spawn row in
-the Turtle WoW database. Other servers have different spawn IDs, so on OctoWoW
-(and anywhere else) none of the 1,839 shipped entries ever match. The keybind,
+the Turtle WoW database (that server has since shut down). Other servers have
+different spawn IDs, so on OctoWoW none of the 1,839 shipped entries ever match. The keybind,
 `/am mark`, `/am next` and Shift+Ctrl mouseover all depend on that lookup, so
 they look broken even though the addon loads fine.
 

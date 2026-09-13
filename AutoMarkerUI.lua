@@ -189,7 +189,7 @@ local function RefreshStatusPage(page)
     .. "   Nampower " .. YesNo(st.nampower) .. " " .. tostring(st.nampowerVersion or ""))
   page.lines[5]:SetText("UnitXP " .. YesNo(st.unitxp) .. "   ClassicAPI " .. YesNo(st.classicapi)
     .. "   Distance: " .. ((st.unitxp or st.classicapi) and "exact yards" or "~28 yd fallback"))
-  page.lines[6]:SetText("|cffaaaaaaPacks are Turtle WoW spawn IDs; auto mode is what marks on other servers.|r")
+  page.lines[6]:SetText("|cffaaaaaaThe shipped packs come from another server; auto mode is what marks on OctoWoW.|r")
 
   for key, check in pairs(page.checks) do
     check:SetChecked(s[key] and 1 or nil)
@@ -287,9 +287,9 @@ local function RefreshListPage(page)
   local count = table.getn(list)
   if page.offset >= count then page.offset = math.max(0, count - LIST_ROWS) end
   if page.which == "prio" then
-    page.hint:SetText("Mobs whose name matches the first pattern get Skull, the next Cross, and so on.")
+    page.hint:SetText("First match gets Skull, the next Cross, and so on down the list.")
   else
-    page.hint:SetText("Mobs whose name matches any of these patterns are never marked.")
+    page.hint:SetText("Mobs matching any of these patterns are never marked.")
   end
   for i = 1, LIST_ROWS do
     local row = page.rows[i]
@@ -441,7 +441,7 @@ local helpLines = {
   "and mouse over mobs to record them. /am get shows the pack of your target.",
   "|cffffff00Notes|r",
   "Only a leader or assistant places marks others can see. Solo, marks are local.",
-  "The shipped packs are Turtle WoW spawn IDs and do nothing on other servers.",
+  "The shipped packs were recorded on another server and do nothing on OctoWoW.",
 }
 
 local function BuildHelpPage(page)
@@ -577,8 +577,10 @@ overlay:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
 local icon = button:CreateTexture(nil, "BACKGROUND")
 icon:SetWidth(18)
 icon:SetHeight(18)
-icon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_8")
-icon:SetPoint("TOPLEFT", button, "TOPLEFT", 8, -6)
+-- 1.12 keeps all eight raid icons in one 4x4 texture; use the skull cell.
+icon:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
+icon:SetTexCoord(0.75, 1, 0.25, 0.5)
+icon:SetPoint("TOPLEFT", button, "TOPLEFT", 7, -5)
 
 function AutoMarker_UpdateMinimapIcon()
   if AutoMarkerDB and AutoMarkerDB.settings and AutoMarkerDB.settings.enabled
