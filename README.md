@@ -1,12 +1,39 @@
 # AutoMarker 1.23.0 (octo-addons fork)
 
-Automatic raid marking for the 1.12 client. This fork of
-[MarcelineVQ/AutoMarker](https://github.com/MarcelineVQ/AutoMarker) adds a
-**name-based auto mode** that works on any server, an info panel with a minimap
-button, and fixes for clients that are not Turtle WoW.
+Automatic raid marking for the 1.12 client, made to work on OctoWoW. This is
+a fork of [MarcelineVQ/AutoMarker](https://github.com/MarcelineVQ/AutoMarker)
+that adds a **name-based auto mode** (no pack data needed), **learning from
+marks you set by hand**, an **info panel with a minimap button**, and fixes
+for clients that are not Turtle WoW.
 
 Requires [SuperWoW](https://github.com/balakethelock/SuperWoW/) or
 [nampower](https://gitea.com/avitasia/nampower) 2.39+. Both together is best.
+
+## Quick start
+
+1. Install, restart the game, and log in. A skull icon appears on the minimap.
+2. Be party leader or raid assistant (solo works too, with local marks).
+3. Pull. Mobs in combat around you get marks by themselves, casters and
+   healers first.
+4. Want a pack marked before the pull? Hold Shift+Ctrl and mouse over one of
+   its mobs.
+5. Set a mark by hand whenever you disagree. The addon remembers it: by name
+   everywhere, and by exact spawn inside instances.
+6. Left-click the minimap skull for settings, lists, macros and help.
+
+## How a mark is chosen
+
+When a free mark is handed out, the first rule that applies wins:
+
+1. The mob is in a **pack** (shipped or recorded): it gets its pack mark.
+2. The mob's **name was learned** from a mark someone set by hand: it gets
+   that mark.
+3. The name matches the **priority list**: earlier patterns get higher marks.
+4. Otherwise mobs are ordered by max health (or classification), then level,
+   then distance.
+
+A mark that sits on a living mob is never moved. Marks free up when the mob
+dies or the mark is cleared.
 
 ## Why the original does nothing on OctoWoW
 
@@ -134,6 +161,13 @@ Auto mode:
   and instance-only
 - `/am ui` - open the info panel
 
+Learning:
+
+- `/am learn [on|off]` - learn name -> mark from marks set by hand (default on)
+- `/am learned` - list learned names; `/am learned remove <name>`, `/am learned reset`
+- `/am record off|instance|always` - auto-record marks into packs (default instance)
+- `/am packs` - recorded packs in this zone; `/am packs delete <name>`
+
 Packs (from the original addon; record your own on any server):
 
 - `/am set <packname>` - set the current pack name (`/am s`)
@@ -191,3 +225,22 @@ Under the **AutoMark** header in the key binding window:
 Original addon by Weird Vibes of Turtle WoW, maintained at
 [MarcelineVQ/AutoMarker](https://github.com/MarcelineVQ/AutoMarker). This fork
 keeps their history and pack data and adds the auto mode, panel and fixes.
+
+## Changelog
+
+### 1.23.0 (octo-addons fork)
+
+- Name-based auto mode: marks nearby hostile mobs by name priority on any
+  server, in combat and on Shift+Ctrl mouseover.
+- Learning: marks set by hand are remembered by name, and recorded into packs
+  per zone inside instances.
+- Info panel with Status, Priority, Learned, Macros and Help tabs, plus a
+  minimap button.
+- Macro text for every action with one-click macro creation.
+- New keybinding: auto-mark nearby hostiles now.
+- Client fixes: solo marking with nampower loaded, unit popup hook on standard
+  FrameXML, saved `false` settings, missing `sync_prefix`, locale fallback.
+
+### 1.22.2 and earlier
+
+See the [upstream project](https://github.com/MarcelineVQ/AutoMarker).
