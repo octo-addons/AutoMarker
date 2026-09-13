@@ -123,13 +123,25 @@ local RefreshAll
 local function BuildStatusPage(page)
   page.lines = {}
   local y = -4
+  local previous = nil
   for i = 1, 6 do
-    page.lines[i] = MakeLabel(page, "", 8, y, "GameFontHighlightSmall", 330)
+    local fs = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    fs:SetJustifyH("LEFT")
+    fs:SetWidth(330)
+    if previous then
+      fs:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
+    else
+      fs:SetPoint("TOPLEFT", page, "TOPLEFT", 8, y)
+    end
+    page.lines[i] = fs
+    previous = fs
     y = y - 14
   end
 
-  y = y - 6
-  MakeLabel(page, "Settings", 8, y, "GameFontNormal")
+  y = y - 8
+  local settingsTitle = page:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+  settingsTitle:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -8)
+  settingsTitle:SetText("Settings")
   y = y - 18
 
   page.checks = {}
@@ -189,7 +201,7 @@ local function RefreshStatusPage(page)
     .. "   Nampower " .. YesNo(st.nampower) .. " " .. tostring(st.nampowerVersion or ""))
   page.lines[5]:SetText("UnitXP " .. YesNo(st.unitxp) .. "   ClassicAPI " .. YesNo(st.classicapi)
     .. "   Distance: " .. ((st.unitxp or st.classicapi) and "exact yards" or "~28 yd fallback"))
-  page.lines[6]:SetText("|cffaaaaaaThe shipped packs come from another server; auto mode is what marks on OctoWoW.|r")
+  page.lines[6]:SetText("|cffaaaaaaShipped packs are from another server; auto mode marks on OctoWoW.|r")
 
   for key, check in pairs(page.checks) do
     check:SetChecked(s[key] and 1 or nil)
