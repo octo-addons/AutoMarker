@@ -1,4 +1,4 @@
-# AutoMarker 1.24.0 (octo-addons fork)
+# AutoMarker 1.24.1 (octo-addons fork)
 
 Automatic raid marking for the 1.12 client, made to work on OctoWoW. This is
 a fork of [MarcelineVQ/AutoMarker](https://github.com/MarcelineVQ/AutoMarker)
@@ -51,8 +51,9 @@ Auto mode fixes this by marking mobs by **name** instead of by spawn ID.
 - **On approach** (inside instances by default): out of combat, when no
   living marked mob is near you, the nearest hostile mob in line of sight
   within the scan radius is marked together with every hostile within the pull
-  radius of it. One pack at a time: the next pack is marked once the current
-  one is dead. `/am approach off|instance|always` controls where this runs.
+  radius of it. It keeps filling that same pack on later passes, so mobs
+  that were not loaded or visible at first still get a mark. One pack at a
+  time: the next pack is marked once the current one is dead. `/am approach off|instance|always` controls where this runs.
 - When you enter combat, and about once a second while in combat, unmarked
   hostile mobs that are fighting within 40 yards of you get free marks.
 - Hold Shift and Ctrl (or Alt) and mouse over a mob, or press the mark keybind,
@@ -246,6 +247,11 @@ Original addon by Weird Vibes of Turtle WoW, maintained at
 keeps their history and pack data and adds the auto mode, panel and fixes.
 
 ## Changelog
+
+### 1.24.1
+
+- Approach pre-marking keeps filling the pack it started on instead of
+  stopping after the first pass, so every mob of the pack gets a mark.
 
 ### 1.24.0
 

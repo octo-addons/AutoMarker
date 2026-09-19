@@ -1200,18 +1200,26 @@ function AutoMarker_Why()
   auto_print("  free marks now: " .. CollectFreeMarks(auto.free))
 end
 
--- True when a living marked mob is within range of the player, meaning a
--- pack is already marked and the approach scan should leave things alone.
-local function LivingMarkNearby(range)
+-- The living marked mob closest to the player within range, or nil. When
+-- one exists a pack is already (partly) marked.
+local function NearestLivingMarked(range)
+  local best, bestDist = nil, nil
   for i = 1, 8 do
     local _, m = UnitExists("mark" .. i)
     local g = m or auto.owner[i] or auto.seen[i]
     if g and UnitExists(g) and not UnitIsDead(g) and GetRaidTargetIndex(g) == i then
-      local d = DistanceBetween("player", g)
-      if not d or d <= range then return true end
+      local d = DistanceBetween("player", g) or 0
+      if d <= range and (not bestDist or d < bestDist) then
+        best, bestDist = g, d
+      end
     end
   end
-  return false
+  return best
+end
+
+local function IsLivingMarked(guid)
+  return guid and UnitExists(guid) and not UnitIsDead(guid)
+    and GetRaidTargetIndex(guid) and true or false
 end
 
 -- Out of combat: mark the nearest visible pack while walking up to it, so
@@ -1224,7 +1232,21 @@ function AutoMarker_ApproachScan()
   if mode == "instance" and not (type(IsInInstance) == "function" and IsInInstance()) then return 0 end
   if UnitIsDeadOrGhost("player") then return 0 end
   if not AutoCanMark() then return 0 end
-  if LivingMarkNearby(s.autoRadius + 20) then return 0 end
+
+  -- A pack near us is already marked, fully or partly: keep filling it.
+  -- The scan stays anchored on one mob so it completes this pack (mobs that
+  -- were not loaded, in range or visible on the first pass) without creeping
+  -- into the next one.
+  local anchor = auto.approach_anchor
+  if not IsLivingMarked(anchor) then
+    anchor = NearestLivingMarked(s.autoRadius + 20)
+    auto.approach_anchor = anchor
+  end
+  if anchor then
+    return AutoAssign(anchor, s.pullRadius, false)
+  end
+
+  -- Nothing marked nearby: start on the nearest visible hostile.
   local cands = auto.cands
   local n = CollectCandidates("player", s.autoRadius, false, cands, nil, true)
   if n == 0 then return 0 end
@@ -1233,6 +1255,7 @@ function AutoMarker_ApproachScan()
     if cands[k].dist < nearest.dist then nearest = cands[k] end
   end
   local anchorGuid = nearest.guid
+  auto.approach_anchor = anchorGuid
   return AutoAssign(anchorGuid, s.pullRadius, false)
 end
 
@@ -1268,6 +1291,7 @@ function AutoMarker_ResetAutoState()
   auto.owner = {}
   auto.owner_guid = {}
   auto.seen = {}
+  auto.approach_anchor = nil
   auto.pack_index_dirty = true
   for guid in pairs(addonPlaced) do addonPlaced[guid] = nil end
 end
