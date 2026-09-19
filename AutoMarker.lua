@@ -398,6 +398,8 @@ local defaultSettings = {
   autoSkipTapped = true,
   autoInstanceOnly = false,
   -- learning from marks set by people
+  -- pre-mark the nearest pack while walking up to it, out of combat
+  autoApproach = "instance", -- "off", "instance", "always"
   autoLearn = true,          -- remember name -> mark
   autoRecord = "instance",   -- record spawn -> mark into packs: "off", "instance", "always"
 }
@@ -949,7 +951,7 @@ local function Tally(diag, key)
   if diag then diag[key] = (diag[key] or 0) + 1 end
 end
 
-local function CollectCandidates(anchor, radius, requireCombat, out, diag)
+local function CollectCandidates(anchor, radius, requireCombat, out, diag, forceLos)
   local zone = GetRealZoneText()
   local s = AutoMarkerDB.settings
   local cache = AutoMarkerDB.unitCache
@@ -988,7 +990,7 @@ local function CollectCandidates(anchor, radius, requireCombat, out, diag)
             end
             if not inRange then
               Tally(diag, "outOfRange")
-            elseif not (guid == anchor or not s.autoLos or not has_unitxp
+            elseif not (guid == anchor or not (s.autoLos or forceLos) or not has_unitxp
               or UnitXP("inSight", "player", guid)) then
               Tally(diag, "noLineOfSight")
             else
@@ -1196,6 +1198,42 @@ function AutoMarker_Why()
     .. ", learned mark: " .. tostring(AutoMarkerDB.learned[lname] and raidMarks[AutoMarkerDB.learned[lname] + 1] or "none")
     .. ", pack mark: " .. tostring(PackMarkFor(guid, GetRealZoneText()) or "none"))
   auto_print("  free marks now: " .. CollectFreeMarks(auto.free))
+end
+
+-- True when a living marked mob is within range of the player, meaning a
+-- pack is already marked and the approach scan should leave things alone.
+local function LivingMarkNearby(range)
+  for i = 1, 8 do
+    local _, m = UnitExists("mark" .. i)
+    local g = m or auto.owner[i] or auto.seen[i]
+    if g and UnitExists(g) and not UnitIsDead(g) and GetRaidTargetIndex(g) == i then
+      local d = DistanceBetween("player", g)
+      if not d or d <= range then return true end
+    end
+  end
+  return false
+end
+
+-- Out of combat: mark the nearest visible pack while walking up to it, so
+-- the pull is marked without pressing anything. Only acts when no living
+-- marked mob is nearby, so it marks one pack at a time.
+function AutoMarker_ApproachScan()
+  local s = AutoMarkerDB.settings
+  local mode = s.autoApproach
+  if not mode or mode == "off" then return 0 end
+  if mode == "instance" and not (type(IsInInstance) == "function" and IsInInstance()) then return 0 end
+  if UnitIsDeadOrGhost("player") then return 0 end
+  if not AutoCanMark() then return 0 end
+  if LivingMarkNearby(s.autoRadius + 20) then return 0 end
+  local cands = auto.cands
+  local n = CollectCandidates("player", s.autoRadius, false, cands, nil, true)
+  if n == 0 then return 0 end
+  local nearest = cands[1]
+  for k = 2, n do
+    if cands[k].dist < nearest.dist then nearest = cands[k] end
+  end
+  local anchorGuid = nearest.guid
+  return AutoAssign(anchorGuid, s.pullRadius, false)
 end
 
 -- Pull pre-mark: the anchor mob and hostiles within pullRadius of it.
@@ -1417,6 +1455,7 @@ function AutoMarker_SetSetting(key, value)
   else
     if key == "autoSort" and value ~= "health" and value ~= "class" then return false end
     if key == "autoRecord" and value ~= "off" and value ~= "instance" and value ~= "always" then return false end
+    if key == "autoApproach" and value ~= "off" and value ~= "instance" and value ~= "always" then return false end
     AutoMarkerDB.settings[key] = value
   end
   if key == "auto" then auto.idle_warned = false end
@@ -1493,7 +1532,8 @@ function AutoMarker_PrintStatus()
   auto_print("  radius " .. AutoMarkerDB.settings.autoRadius .. " yd, pull radius "
     .. AutoMarkerDB.settings.pullRadius .. " yd, sort " .. AutoMarkerDB.settings.autoSort
     .. ", require combat " .. onoff(AutoMarkerDB.settings.autoRequireCombat)
-    .. ", line of sight " .. onoff(AutoMarkerDB.settings.autoLos))
+    .. ", line of sight " .. onoff(AutoMarkerDB.settings.autoLos)
+    .. ", approach pre-mark " .. tostring(AutoMarkerDB.settings.autoApproach))
   auto_print("  SuperWoW " .. (st.superwow and c("yes", color.green) .. " " .. tostring(st.superwowVersion or "") or c("no", color.red))
     .. ", Nampower " .. (st.nampower and c("yes", color.green) .. " " .. tostring(st.nampowerVersion or "") or c("no", color.red))
     .. ", UnitXP " .. (st.unitxp and c("yes", color.green) or c("no", color.red))
@@ -1508,6 +1548,14 @@ local function AMUpdate()
 
     if AutoMarkerDB.settings.auto and auto.in_combat and GetTime() >= auto.next_scan then
       AutoMarker_AutoScan()
+    elseif AutoMarkerDB.settings.auto and not auto.in_combat
+      and GetTime() >= (auto.next_approach or 0) then
+      auto.next_approach = GetTime() + 1
+      local ok, err = pcall(AutoMarker_ApproachScan)
+      if not ok and not auto.error_reported then
+        auto.error_reported = true
+        auto_print(c("AutoMarker approach error: ", color.red) .. tostring(err))
+      end
     end
 
     if AutoMarkerDB.checkCoreHounds and core_delay_elapsed > core_delay then
@@ -2172,6 +2220,15 @@ local function handleCommands(msg, editbox)
     AutoMarker_AutoScan(true)
   elseif command == "why" then
     AutoMarker_Why()
+  elseif command == "approach" then
+    local sub = packName and string.lower(packName)
+    if sub ~= "off" and sub ~= "instance" and sub ~= "always" then
+      auto_print("Pre-marking on approach is '" .. tostring(AutoMarkerDB.settings.autoApproach)
+        .. "'. Use /am approach off||instance||always.")
+      return
+    end
+    AutoMarker_SetSetting("autoApproach", sub)
+    auto_print("Pre-marking the nearest pack on approach: " .. c(sub, color.green))
   elseif command == "radius" or command == "pullradius" then
     local key = command == "radius" and "autoRadius" or "pullRadius"
     if not tonumber(packName) then
@@ -2299,6 +2356,7 @@ local function handleCommands(msg, editbox)
       auto_print("/am " .. c("auto", color.green) .. " [on||off||status] - Toggle automatic name-based marking.")
       auto_print("/am " .. c("autoscan", color.green) .. " - Mark nearby hostiles now, even out of combat, and report why mobs were skipped.")
       auto_print("/am " .. c("why", color.green) .. " - Explain every auto mode check for your current target.")
+      auto_print("/am " .. c("approach", color.green) .. " off||instance||always - Pre-mark the nearest pack as you walk up to it.")
       auto_print("/am " .. c("radius", color.green) .. " <yd> / " .. c("pullradius", color.green) .. " <yd> - Scan ranges (default 40 / 30).")
       auto_print("/am " .. c("prio", color.green) .. " [add||remove||top||reset] <pattern> - Name priority list (first = Skull).")
       auto_print("/am " .. c("ignore", color.green) .. " [add||remove||reset] <pattern> - Names never marked.")

@@ -1,9 +1,9 @@
 ## Interface: 11200
-## Title: [SuperWoW] AutoMarker 1.23.0 |cff7fff7focto|r
+## Title: [SuperWoW] AutoMarker 1.24.0 |cff7fff7focto|r
 ## Notes: Automatically mark raid mobs. octo-addons fork with name-based auto marking that works on any server.
 ## Author: Weird Vibes, octo-addons fork
 ## SavedVariables: AutoMarkerDB
-## Version: 1.23.0
+## Version: 1.24.0
 
 Locale\Localization.xml
 NPCList.lua

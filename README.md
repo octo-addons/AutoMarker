@@ -1,4 +1,4 @@
-# AutoMarker 1.23.0 (octo-addons fork)
+# AutoMarker 1.24.0 (octo-addons fork)
 
 Automatic raid marking for the 1.12 client, made to work on OctoWoW. This is
 a fork of [MarcelineVQ/AutoMarker](https://github.com/MarcelineVQ/AutoMarker)
@@ -13,10 +13,10 @@ Requires [SuperWoW](https://github.com/balakethelock/SuperWoW/) or
 
 1. Install, restart the game, and log in. A skull icon appears on the minimap.
 2. Be party leader or raid assistant (solo works too, with local marks).
-3. Pull. Mobs in combat around you get marks by themselves, casters and
-   healers first.
-4. Want a pack marked before the pull? Hold Shift+Ctrl and mouse over one of
-   its mobs.
+3. In a dungeon or raid, walk up to a pack: it is marked before you pull,
+   casters and healers first. In combat, new mobs get any free marks.
+4. In the open world, or to pick a specific pack, hold Shift+Ctrl and mouse
+   over one of its mobs.
 5. Set a mark by hand whenever you disagree. The addon remembers it: by name
    everywhere, and by exact spawn inside instances.
 6. Left-click the minimap skull for settings, lists, macros and help.
@@ -48,6 +48,11 @@ Auto mode fixes this by marking mobs by **name** instead of by spawn ID.
 
 ## Auto mode
 
+- **On approach** (inside instances by default): out of combat, when no
+  living marked mob is near you, the nearest hostile mob in line of sight
+  within the scan radius is marked together with every hostile within the pull
+  radius of it. One pack at a time: the next pack is marked once the current
+  one is dead. `/am approach off|instance|always` controls where this runs.
 - When you enter combat, and about once a second while in combat, unmarked
   hostile mobs that are fighting within 40 yards of you get free marks.
 - Hold Shift and Ctrl (or Alt) and mouse over a mob, or press the mark keybind,
@@ -154,6 +159,7 @@ Auto mode:
 - `/am autoscan` - mark nearby hostiles now, even out of combat, and report how
   many cached mobs were accepted or skipped and for which reason
 - `/am why` - explain every auto mode check for your current target
+- `/am approach off|instance|always` - pre-mark the nearest pack as you walk up to it (default instance)
 - `/am radius <5-100>` - combat scan radius around you (default 40)
 - `/am pullradius <5-100>` - pre-mark radius around the moused-over mob (default 30)
 - `/am prio [add|remove|top|reset] <pattern>` - manage the priority list; no argument lists it
@@ -240,6 +246,17 @@ Original addon by Weird Vibes of Turtle WoW, maintained at
 keeps their history and pack data and adds the auto mode, panel and fixes.
 
 ## Changelog
+
+### 1.24.0
+
+- Pre-mark the nearest pack on approach, out of combat, inside instances by
+  default. Needs line of sight when UnitXP is available.
+- `/am autoscan` reports why cached mobs were skipped; `/am why` explains
+  every check for the current target; scan errors are printed instead of
+  swallowed.
+- `/am on` and `/am off` replace the confusing `/am enabled` toggle; login
+  warns when the addon is switched off and a right-click on the minimap
+  button switches it back on.
 
 ### 1.23.0 (octo-addons fork)
 

@@ -178,7 +178,17 @@ local function BuildStatusPage(page)
     AutoMarker_SetSetting("autoSort", current == "health" and "class" or "health")
     RefreshAll()
   end)
-  page.sortButton:SetPoint("TOPLEFT", page, "TOPLEFT", 150, y)
+  page.sortButton:SetPoint("TOPLEFT", page, "TOPLEFT", 190, y)
+  y = y - 26
+
+  MakeLabel(page, "Pre-mark next pack on approach:", 8, y - 4, "GameFontHighlightSmall")
+  page.approachButton = MakeButton(page, "In instances", 100, 20, function()
+    local nextMode = { off = "instance", instance = "always", always = "off" }
+    local current = AutoMarkerDB.settings.autoApproach or "instance"
+    AutoMarker_SetSetting("autoApproach", nextMode[current] or "instance")
+    RefreshAll()
+  end)
+  page.approachButton:SetPoint("TOPLEFT", page, "TOPLEFT", 190, y)
   y = y - 26
 
   local scan = MakeButton(page, "Mark nearby now", 120, 20, function() AutoMarker_AutoScan(true) end)
@@ -209,6 +219,8 @@ local function RefreshStatusPage(page)
   SetSliderValue(page.radius, s.autoRadius)
   SetSliderValue(page.pullRadius, s.pullRadius)
   page.sortButton:SetText(s.autoSort == "class" and "Class" or "Health")
+  local approachLabels = { off = "Off", instance = "In instances", always = "Everywhere" }
+  page.approachButton:SetText(approachLabels[s.autoApproach or "instance"] or "In instances")
 end
 
 -- ---------------------------------------------------------------------------
@@ -633,7 +645,7 @@ local function CreatePanel()
   if panel then return end
   panel = CreateFrame("Frame", "AutoMarkerPanel", UIParent)
   panel:SetWidth(360)
-  panel:SetHeight(480)
+  panel:SetHeight(510)
   panel:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
   panel:SetFrameStrata("DIALOG")
   panel:SetMovable(true)
