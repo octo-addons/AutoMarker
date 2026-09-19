@@ -1,4 +1,4 @@
-# AutoMarker 1.24.1 (octo-addons fork)
+# AutoMarker 1.24.2 (octo-addons fork)
 
 Automatic raid marking for the 1.12 client, made to work on OctoWoW. This is
 a fork of [MarcelineVQ/AutoMarker](https://github.com/MarcelineVQ/AutoMarker)
@@ -65,6 +65,8 @@ Auto mode fixes this by marking mobs by **name** instead of by spawn ID.
 - A mark that sits on a living mob is never moved, so marks you set by hand are
   respected. When a marked mob dies its mark is reused within a second.
 - Pack data still wins: a mob that is in a pack gets its pack mark.
+- Only hostile (red name) mobs are marked. Neutral mobs are skipped unless
+  your group is already fighting them, or you opt in with `/am autoneutral`.
 - Mobs on the **never mark** list, critters, totems, pets and players are
   skipped. Mobs tapped by another group are skipped by default.
 
@@ -166,9 +168,9 @@ Auto mode:
 - `/am prio [add|remove|top|reset] <pattern>` - manage the priority list; no argument lists it
 - `/am ignore [add|remove|reset] <pattern>` - manage the never-mark list
 - `/am autosort health|class` - how unmatched mobs are ordered
-- `/am autocombat`, `/am autolos`, `/am autotapped`, `/am autoinstance` - toggles for
-  "only mobs already in combat", line of sight (needs UnitXP), skip tapped mobs,
-  and instance-only
+- `/am autocombat`, `/am autolos`, `/am autotapped`, `/am autoinstance`,
+  `/am autoneutral` - toggles for "only mobs already in combat", line of sight
+  (needs UnitXP), skip tapped mobs, instance-only, and marking neutral mobs
 - `/am ui` - open the info panel
 
 Learning:
@@ -247,6 +249,12 @@ Original addon by Weird Vibes of Turtle WoW, maintained at
 keeps their history and pack data and adds the auto mode, panel and fixes.
 
 ## Changelog
+
+### 1.24.2
+
+- Neutral (yellow) mobs are no longer marked. They still are once your group
+  is fighting them, and `/am autoneutral` marks them always. `/am autoscan` and
+  `/am why` report the reaction.
 
 ### 1.24.1
 

@@ -396,6 +396,7 @@ local defaultSettings = {
   autoRequireCombat = true,
   autoLos = false,
   autoSkipTapped = true,
+  autoNeutral = false,       -- also mark neutral (yellow) mobs
   autoInstanceOnly = false,
   -- learning from marks set by people
   -- pre-mark the nearest pack while walking up to it, out of combat
@@ -947,6 +948,17 @@ local function CollectFreeMarks(freeList)
 end
 
 -- Collects unmarked hostile mobs around anchor into out; cheapest checks first.
+-- Hostile means the mob's reaction towards the player is hostile (red name).
+-- Neutral (yellow) mobs are attackable but should not be marked, unless the
+-- group is already fighting them or the user opted in.
+local function IsHostileEnough(guid)
+  local reaction = UnitReaction(guid, "player")
+  if reaction and reaction <= 3 then return true end
+  if AutoMarkerDB.settings.autoNeutral then return true end
+  if UnitAffectingCombat(guid) and UnitIsTappedByPlayer(guid) then return true end
+  return false
+end
+
 local function Tally(diag, key)
   if diag then diag[key] = (diag[key] or 0) + 1 end
 end
@@ -969,6 +981,8 @@ local function CollectCandidates(anchor, radius, requireCombat, out, diag, force
         Tally(diag, "dead")
       elseif not UnitCanAttack("player", guid) then
         Tally(diag, "notAttackable")
+      elseif not IsHostileEnough(guid) then
+        Tally(diag, "neutral")
       elseif not (guid == anchor or not requireCombat or UnitAffectingCombat(guid)) then
         Tally(diag, "notInCombat")
       elseif UnitPlayerControlled(guid) or UnitIsPlayer(guid) then
@@ -1145,7 +1159,7 @@ function AutoMarker_AutoScan(force)
     auto_print(c("AutoMarker scan: ", color.yellow) .. "placed " .. placed .. " mark(s), "
       .. tostring(diag.freeMarks) .. " free before the scan, radius "
       .. AutoMarkerDB.settings.autoRadius .. " yd.")
-    local order = { "accepted", "outOfRange", "notInCombat", "notAttackable", "alreadyMarked",
+    local order = { "accepted", "outOfRange", "notInCombat", "notAttackable", "neutral", "alreadyMarked",
       "dead", "tappedByOthers", "petOrPlayer", "critterOrTotem", "ignoredName",
       "noLineOfSight", "gone" }
     local parts = {}
@@ -1178,6 +1192,9 @@ function AutoMarker_Why()
   line("alive", not UnitIsDead(guid), not UnitIsDead(guid))
   local attackable = UnitCanAttack("player", guid) and true or false
   line("attackable", attackable, attackable)
+  local reaction = UnitReaction(guid, "player")
+  local reactionText = reaction and (reaction <= 3 and "hostile" or (reaction == 4 and "neutral" or "friendly")) or "unknown"
+  line("reaction towards you (" .. tostring(reaction) .. ")", reactionText, IsHostileEnough(guid))
   local inCombat = UnitAffectingCombat(guid) and true or false
   line("in combat (needed by the combat filler: " .. tostring(s.autoRequireCombat) .. ")", inCombat,
     inCombat or not s.autoRequireCombat)
@@ -2299,9 +2316,11 @@ local function handleCommands(msg, editbox)
     end
     AutoMarker_SetSetting("autoSort", sub)
     auto_print("Unmatched mobs are now ordered by " .. sub .. ".")
-  elseif command == "autocombat" or command == "autolos" or command == "autotapped" or command == "autoinstance" then
+  elseif command == "autocombat" or command == "autolos" or command == "autotapped"
+    or command == "autoinstance" or command == "autoneutral" then
     local keys = { autocombat = "autoRequireCombat", autolos = "autoLos",
-      autotapped = "autoSkipTapped", autoinstance = "autoInstanceOnly" }
+      autotapped = "autoSkipTapped", autoinstance = "autoInstanceOnly",
+      autoneutral = "autoNeutral" }
     local key = keys[command]
     local sub = packName and string.lower(packName)
     local value
