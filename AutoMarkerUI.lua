@@ -777,8 +777,15 @@ button:SetScript("OnDragStop", function() this:SetScript("OnUpdate", nil) end)
 button:SetScript("OnClick", function()
   if not Ready() then return end
   if arg1 == "RightButton" then
-    AutoMarker_SetSetting("auto", not AutoMarkerDB.settings.auto)
-    Print("auto mode " .. (AutoMarkerDB.settings.auto and "on." or "off."))
+    if not AutoMarkerDB.settings.enabled then
+      -- the whole addon is off: a right-click turns everything back on
+      AutoMarker_SetSetting("enabled", true)
+      AutoMarker_SetSetting("auto", true)
+      Print("switched on, auto mode on.")
+    else
+      AutoMarker_SetSetting("auto", not AutoMarkerDB.settings.auto)
+      Print("auto mode " .. (AutoMarkerDB.settings.auto and "on." or "off."))
+    end
     AutoMarker_UpdateMinimapIcon()
     RefreshAll()
   else
@@ -790,6 +797,9 @@ button:SetScript("OnEnter", function()
   GameTooltip:SetText("AutoMarker")
   if Ready() then
     local st = AutoMarker_GetStatus()
+    if not st.enabled then
+      GameTooltip:AddLine("Addon is switched OFF - right-click to switch on", 1, 0.2, 0.2)
+    end
     GameTooltip:AddLine("Auto mode: " .. (st.auto and "on" or "off"), 1, 1, 1)
     GameTooltip:AddLine("Can mark: " .. (st.canMark and "yes" or "no") .. " (" .. st.reason .. ")", 1, 1, 1)
   end

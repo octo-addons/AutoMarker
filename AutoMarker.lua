@@ -945,7 +945,11 @@ local function CollectFreeMarks(freeList)
 end
 
 -- Collects unmarked hostile mobs around anchor into out; cheapest checks first.
-local function CollectCandidates(anchor, radius, requireCombat, out)
+local function Tally(diag, key)
+  if diag then diag[key] = (diag[key] or 0) + 1 end
+end
+
+local function CollectCandidates(anchor, radius, requireCombat, out, diag)
   local zone = GetRealZoneText()
   local s = AutoMarkerDB.settings
   local cache = AutoMarkerDB.unitCache
@@ -953,26 +957,42 @@ local function CollectCandidates(anchor, radius, requireCombat, out)
   for guid, name in pairs(cache) do
     if not IsMobGuid(guid) or not UnitExists(guid) then
       cache[guid] = nil
+      Tally(diag, "gone")
     else
       local mark = GetRaidTargetIndex(guid)
       if mark then
         auto.seen[mark] = guid
-      elseif not UnitIsDead(guid)
-        and UnitCanAttack("player", guid)
-        and (guid == anchor or not requireCombat or UnitAffectingCombat(guid))
-        and not UnitPlayerControlled(guid)
-        and not UnitIsPlayer(guid) then
+        Tally(diag, "alreadyMarked")
+      elseif UnitIsDead(guid) then
+        Tally(diag, "dead")
+      elseif not UnitCanAttack("player", guid) then
+        Tally(diag, "notAttackable")
+      elseif not (guid == anchor or not requireCombat or UnitAffectingCombat(guid)) then
+        Tally(diag, "notInCombat")
+      elseif UnitPlayerControlled(guid) or UnitIsPlayer(guid) then
+        Tally(diag, "petOrPlayer")
+      else
         local ctype = UnitCreatureType(guid)
-        if ctype ~= "Critter" and ctype ~= "Totem"
-          and not (s.autoSkipTapped and UnitIsTapped(guid) and not UnitIsTappedByPlayer(guid)) then
+        if ctype == "Critter" or ctype == "Totem" then
+          Tally(diag, "critterOrTotem")
+        elseif s.autoSkipTapped and UnitIsTapped(guid) and not UnitIsTappedByPlayer(guid) then
+          Tally(diag, "tappedByOthers")
+        else
           local lname = string.lower(name or UnitName(guid) or "")
-          if not MatchList(lname, AutoMarkerDB.autoIgnore) then
+          if MatchList(lname, AutoMarkerDB.autoIgnore) then
+            Tally(diag, "ignoredName")
+          else
             local inRange, dist = true, 0
             if guid ~= anchor then
               inRange, dist = WithinRadius(anchor, guid, radius)
             end
-            if inRange and (guid == anchor or not s.autoLos or not has_unitxp
+            if not inRange then
+              Tally(diag, "outOfRange")
+            elseif not (guid == anchor or not s.autoLos or not has_unitxp
               or UnitXP("inSight", "player", guid)) then
+              Tally(diag, "noLineOfSight")
+            else
+              Tally(diag, "accepted")
               n = n + 1
               local rec = out[n]
               if not rec then
@@ -1034,12 +1054,13 @@ local function AssignMark(guid, i)
 end
 
 -- Core: fills free marks around anchor. Returns the number of marks placed.
-local function AutoAssign(anchor, radius, requireCombat)
+local function AutoAssign(anchor, radius, requireCombat, diag)
   local free = auto.free
   local nfree = CollectFreeMarks(free)
+  if diag then diag.freeMarks = nfree end
   if nfree == 0 then return 0 end
   local cands = auto.cands
-  local n = CollectCandidates(anchor, radius, requireCombat, cands)
+  local n = CollectCandidates(anchor, radius, requireCombat, cands, diag)
   if n == 0 then return 0 end
 
   local placed = 0
@@ -1106,11 +1127,75 @@ function AutoMarker_AutoScan(force)
     return
   end
   auto.next_scan = GetTime() + (AutoMarkerDB.settings.autoInterval or 1)
-  local placed = AutoAssign("player", AutoMarkerDB.settings.autoRadius,
-    AutoMarkerDB.settings.autoRequireCombat and not force)
-  if force then
-    auto_print("AutoMarker: auto scan placed " .. placed .. " mark(s).")
+  local diag = force and {} or nil
+  -- A Lua error inside the scan would otherwise be swallowed or spam every
+  -- tick; report it once (always on a forced scan).
+  local ok, placed = pcall(AutoAssign, "player", AutoMarkerDB.settings.autoRadius,
+    AutoMarkerDB.settings.autoRequireCombat and not force, diag)
+  if not ok then
+    if force or not auto.error_reported then
+      auto.error_reported = true
+      auto_print(c("AutoMarker scan error: ", color.red) .. tostring(placed))
+    end
+    return
   end
+  if force then
+    auto_print(c("AutoMarker scan: ", color.yellow) .. "placed " .. placed .. " mark(s), "
+      .. tostring(diag.freeMarks) .. " free before the scan, radius "
+      .. AutoMarkerDB.settings.autoRadius .. " yd.")
+    local order = { "accepted", "outOfRange", "notInCombat", "notAttackable", "alreadyMarked",
+      "dead", "tappedByOthers", "petOrPlayer", "critterOrTotem", "ignoredName",
+      "noLineOfSight", "gone" }
+    local parts = {}
+    for _, key in ipairs(order) do
+      if diag[key] then tinsert(parts, key .. " " .. diag[key]) end
+    end
+    auto_print("  cached mobs: " .. (table.getn(parts) > 0 and table.concat(parts, ", ") or "none"))
+  end
+end
+
+-- Explains, for the current target, every check auto mode applies.
+function AutoMarker_Why()
+  local _, guid = UnitExists("target")
+  if not guid then
+    auto_print("AutoMarker: target a mob first.")
+    return
+  end
+  local s = AutoMarkerDB.settings
+  local function line(label, value, good)
+    auto_print("  " .. label .. ": " .. (good and c(tostring(value), color.green) or c(tostring(value), color.red)))
+  end
+  local canMark, reason = AutoCanMarkReason()
+  auto_print(c("AutoMarker why: ", color.yellow) .. tostring(UnitName(guid)) .. " " .. guid)
+  line("this character can mark", reason, canMark)
+  line("is a mob guid", IsMobGuid(guid), IsMobGuid(guid))
+  local cached = AutoMarkerDB.unitCache[guid] ~= nil
+  line("in the mob cache", cached, cached)
+  local mark = GetRaidTargetIndex(guid)
+  line("current mark", mark and raidMarks[mark + 1] or "none", not mark)
+  line("alive", not UnitIsDead(guid), not UnitIsDead(guid))
+  local attackable = UnitCanAttack("player", guid) and true or false
+  line("attackable", attackable, attackable)
+  local inCombat = UnitAffectingCombat(guid) and true or false
+  line("in combat (needed by the combat filler: " .. tostring(s.autoRequireCombat) .. ")", inCombat,
+    inCombat or not s.autoRequireCombat)
+  local pet = (UnitPlayerControlled(guid) or UnitIsPlayer(guid)) and true or false
+  line("pet or player", pet, not pet)
+  local ctype = UnitCreatureType(guid)
+  line("creature type", ctype, ctype ~= "Critter" and ctype ~= "Totem")
+  local tapped = (UnitIsTapped(guid) and not UnitIsTappedByPlayer(guid)) and true or false
+  line("tapped by others", tapped, not (tapped and s.autoSkipTapped))
+  local lname = string.lower(UnitName(guid) or "")
+  local ignored = MatchList(lname, AutoMarkerDB.autoIgnore)
+  line("on the never-mark list", ignored and AutoMarkerDB.autoIgnore[ignored] or "no", not ignored)
+  local dist = DistanceBetween("player", guid)
+  line("distance (scan radius " .. s.autoRadius .. ")", dist and string.format("%.1f yd", dist) or "unknown",
+    (dist and dist <= s.autoRadius) or false)
+  local prio = MatchList(lname, AutoMarkerDB.autoPrio)
+  auto_print("  priority match: " .. (prio and (prio .. " (" .. AutoMarkerDB.autoPrio[prio] .. ")") or "none")
+    .. ", learned mark: " .. tostring(AutoMarkerDB.learned[lname] and raidMarks[AutoMarkerDB.learned[lname] + 1] or "none")
+    .. ", pack mark: " .. tostring(PackMarkFor(guid, GetRealZoneText()) or "none"))
+  auto_print("  free marks now: " .. CollectFreeMarks(auto.free))
 end
 
 -- Pull pre-mark: the anchor mob and hostiles within pullRadius of it.
@@ -1544,6 +1629,10 @@ function autoMarker:Initialize()
     end
   end
   auto_print(c(L["AutoMarker loaded!"],color.yellow)..L[" Type "]..c("/am",color.green)..L[" to see commands."])
+  if not AutoMarkerDB.settings.enabled then
+    auto_print(c("AutoMarker is switched off", color.red) .. " and will not mark anything. Type "
+      .. c("/am on", color.green) .. " or tick 'AutoMarker enabled' in the panel.")
+  end
 end
 
 local function ClearTemps()
@@ -1959,8 +2048,20 @@ local function handleCommands(msg, editbox)
     return
   end
 
-  if command == "enabled" then
-    AutoMarkerDB.settings.enabled = not AutoMarkerDB.settings.enabled
+  if command == "enabled" or command == "enable" or command == "on" or command == "e"
+    or command == "disabled" or command == "disable" or command == "off"
+    or command == "toggle" then
+    -- Upstream made "enabled" a toggle, so typing it to switch the addon on
+    -- silently switched it off. The words now mean what they say.
+    local wanted = true
+    if command == "toggle" then
+      wanted = not AutoMarkerDB.settings.enabled
+    elseif command == "disabled" or command == "disable" or command == "off" then
+      wanted = false
+    end
+    if packName == "on" then wanted = true elseif packName == "off" then wanted = false end
+    AutoMarkerDB.settings.enabled = wanted
+    if AutoMarker_UpdateMinimapIcon then AutoMarker_UpdateMinimapIcon() end
     auto_print(L["AutoMarker is now ["] ..
         (AutoMarkerDB.settings.enabled and c(L["enabled"], color.green) or c(L["disabled"], color.red)) .. "]")
   elseif command == "set" or command == "s" then
@@ -2069,6 +2170,8 @@ local function handleCommands(msg, editbox)
     auto_print("Auto mode [ " .. (AutoMarkerDB.settings.auto and c("on", color.green) or c("off", color.red)) .. " ]")
   elseif command == "autoscan" then
     AutoMarker_AutoScan(true)
+  elseif command == "why" then
+    AutoMarker_Why()
   elseif command == "radius" or command == "pullradius" then
     local key = command == "radius" and "autoRadius" or "pullRadius"
     if not tonumber(packName) then
@@ -2181,7 +2284,7 @@ local function handleCommands(msg, editbox)
     if AutoMarker_ToggleUI then AutoMarker_ToggleUI() end
   else
       auto_print(L["Commands:"])
-      auto_print("/am " .. c("e", color.green) .. L["nable - enabled or disable addon."])
+      auto_print("/am " .. c("on", color.green) .. " / " .. c("off", color.green) .. " - Switch the whole addon on or off.")
       auto_print("/am " .. c("s", color.green) .. L["et <packname> - Set the current pack name."])
       auto_print("/am " .. c("g", color.green) .. L["et - Get the current pack name and information about the targeted mob."])
       auto_print("/am " .. c("c", color.green) .. L["lear - Clear all mobs in the current pack."])
@@ -2194,7 +2297,8 @@ local function handleCommands(msg, editbox)
       auto_print(L["/am markname - Mark all units of a given name."])
       auto_print(c("Auto mode (name-based, works on any server):", color.yellow))
       auto_print("/am " .. c("auto", color.green) .. " [on||off||status] - Toggle automatic name-based marking.")
-      auto_print("/am " .. c("autoscan", color.green) .. " - Mark nearby hostiles now, even out of combat.")
+      auto_print("/am " .. c("autoscan", color.green) .. " - Mark nearby hostiles now, even out of combat, and report why mobs were skipped.")
+      auto_print("/am " .. c("why", color.green) .. " - Explain every auto mode check for your current target.")
       auto_print("/am " .. c("radius", color.green) .. " <yd> / " .. c("pullradius", color.green) .. " <yd> - Scan ranges (default 40 / 30).")
       auto_print("/am " .. c("prio", color.green) .. " [add||remove||top||reset] <pattern> - Name priority list (first = Skull).")
       auto_print("/am " .. c("ignore", color.green) .. " [add||remove||reset] <pattern> - Names never marked.")

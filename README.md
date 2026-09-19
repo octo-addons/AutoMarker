@@ -150,7 +150,10 @@ game rather than using `/reload` the first time.
 Auto mode:
 
 - `/am auto [on|off|status]` - toggle auto mode, or print a full status report
-- `/am autoscan` - mark nearby hostiles now, even out of combat
+- `/am on`, `/am off` - switch the whole addon on or off (`/am toggle` flips it)
+- `/am autoscan` - mark nearby hostiles now, even out of combat, and report how
+  many cached mobs were accepted or skipped and for which reason
+- `/am why` - explain every auto mode check for your current target
 - `/am radius <5-100>` - combat scan radius around you (default 40)
 - `/am pullradius <5-100>` - pre-mark radius around the moused-over mob (default 30)
 - `/am prio [add|remove|top|reset] <pattern>` - manage the priority list; no argument lists it
@@ -202,6 +205,16 @@ Under the **AutoMark** header in the key binding window:
   classification and level.
 - **UnitXP_SP3** or **ClassicAPI**: recommended for exact yard distances. Without
   either, "in range" means within interact distance (about 28 yards).
+
+## Troubleshooting
+
+If nothing gets marked, stand near the mobs and run `/am autoscan`. The report
+lists how many cached mobs were accepted and how many were skipped as out of
+range, not in combat, not attackable, already marked, tapped by others and so
+on. Target a mob and run `/am why` for the same checks on that one mob, plus
+whether this character can mark at all. In a group, only the leader or an
+assistant marks. If the addon was switched off, login prints a red reminder
+and a right-click on the minimap skull switches it back on.
 
 ## Known limits
 
